@@ -1,12 +1,28 @@
 import re
+import pandas as pd
+
+def to_words(s):
+    res = ""
+    letters = "абвгдеёжзийклмнопрстуфхцчшщьыъэюя "
+    for i in s.lower():
+        if i in letters:
+            res += i
+
+    return res.strip().split(" ")
+
 
 class Dataset:
+    sentences = []
 
     def __init__(self, path):
         file = open(path, 'r')
-        #ПЕРВЫЙ ЭТАП
-        re.split(r'(?<=[.!?…]) ', file.read())
+        # разбиваем текст на предложения
+        split_regex = re.compile(r'[.|!|?|…]')
+        self.sentences = [to_words(x) for x in filter(lambda t: t, [t.strip() for t in split_regex.split(file.read())])]
 
+    def __str__(self):
+        return str(self.sentences[1:5:])
 
-    def shape(self):
-        pass
+    def get(self, min_sentence_size=3):
+        return [x for x in self.sentences if len(x) >= min_sentence_size]
+
