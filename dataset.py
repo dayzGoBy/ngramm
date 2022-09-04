@@ -1,14 +1,19 @@
 import re
 import pandas as pd
 
+# TODO: написать нормальную генерацию датасета и текста!!! и все
 def to_words(s):
     res = ""
-    letters = "абвгдеёжзийклмнопрстуфхцчшщьыъэюя "
+    temp = ""
+    letters = "абвгдеёжзийклмнопрстуфхцчшщьыъэюя"
     for i in s.lower():
         if i in letters:
-            res += i
+            temp += i
+        else:
+            res += (temp+" ")
+            temp = ""
 
-    return res.strip().split(" ")
+    return res.lstrip(" ").split()
 
 
 class Dataset:
