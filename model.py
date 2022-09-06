@@ -1,14 +1,14 @@
+import random
 import numpy as np
-import pandas as pd
+from collections import defaultdict
+from random import uniform
 from datetime import datetime
 from functools import cmp_to_key
-import os
 
 # статический метод для вероятностного выбора следующего после фразы слова
-def choice(d, base_frequency):
+def choice(d):
     """
     :param d: хэшмап, в котором хранятся частоты каждого слова, следующего после определенной фразы фразы
-    :param base_frequency: частота фразы
     :return: следующее слово
 
     Суть метода заключается в том, что следующее слово выбирается с той же вероятностью, с какой она встречается в
@@ -26,7 +26,7 @@ def choice(d, base_frequency):
     for i in range(1, len(segment)):
         segment[i][0] += segment[i - 1][0]
 
-    x = np.random.uniform(low=0, high=base_frequency)
+    x = np.random.uniform(low=0, high=1)
     # do binary search instead
     res = ""
     for i in segment:
@@ -35,87 +35,93 @@ def choice(d, base_frequency):
             break
     return res
 
-# TODO: переписать все это на pandas
+def gen_n_grams(units, n=3):
+    if n == 3:
+        w0, w1 = 'blank', 'blank'
+        for w2 in units:
+            yield w0, w1, w2
+            if w2 in '.!?':
+                yield w1, w2, 'blank'
+                yield w2, 'blank', 'blank'
+                w0, w1 = 'blank', 'blank'
+            else:
+                w0, w1 = w1, w2
+    elif n > 3:
+        n_min_one = ['blank' for i in range(n - 1)]
+        for w in units:
+            yield *n_min_one, w
+            if w in '.!?':
+                yield *n_min_one[1::], 'blank'
+                yield *n_min_one[2::], 'blank', 'blank'
+                n_min_one = ['blank' for i in range(n - 1)]
+            else:
+                n_min_one = [i for i in list(n_min_one.append(w)[1::])]
+
+    else:
+        # выдавай исключение
+        pass
+
 # класс, объектом которого является модель
 class Model:
     # по умолчанию используем биграмную модель
-    n = 2
-    # датафрейм, в котором содержаться данные обучения модели
-    data = pd.DataFrame()
-    # имя модели (также имя csv-файла, в который она сохранится)
-    name = ""
+    n = 3
     # путь до папки, в которой лежит модель
-    root_path = ""
-    base_freq = {}  # -> frequency
-    next_freq = {}  # -> pd.Series freq
-    start_base = []  # -> is_start
+    path = ""
+    # частоты n - грамм
+    n_seq = defaultdict(lambda: 0.0)
+    # частоты n-1 - грамм
+    base_seq = defaultdict(lambda: 0.0)
+    # хэшмап, в которой каждой n-1 - грамме ставится в соответствие пара (слово, вероятность)
+    model = {}
+    is_normalized = False
 
     # инициализируем модель, создавая датафрейм для ее хранения или загружая его из csv
-    def __init__(self, k_gram=2, root_path="models/", name=str(datetime.now()), mode="create new model"):
-        self.n = k_gram
-        self.name = name
-        self.root_path = root_path
-        """if mode == "create new model":
-            self.data = open(root_path+name, 'x')
-            self.data = pd.DataFrame(columns=["phrase", "frequency", "next words", "is start"])
-        elif mode == "upload model":
-            self.data = pd.read_csv(root_path+name)"""
-
-    # приватный вспомогательный метод, который возвращает фразу длиной n-1 начиная с x-го слова из данного предложения
-    def __phrase(self, sentence, x):
-        phrase = ""
-        for i in sentence[x: self.n - 1:]:
-            phrase += (" " + i)
-        return phrase
+    def __init__(self, n=3, path="models/test", mode="create"):
+        self.n = n
+        self.path = path
+        if mode == "create":
+            # создаем файлы в которых будет храниться модель
+            open(path+"/base.npy")
+            open(path+"/n_seq.npy")
 
     # метод, обучающий модель на датасете
     def train(self, dataset):
-        # будем обучать на отдельных предложениях, так как связи между концом одного предложения и началом другого нет
-        for sentence in dataset.get():
-            # base - это "базовая" фраза, слово за которой мы смотрим
-            base = self.__phrase(sentence, 0)
-            """if base not in self.data.index:
-                self.data.append({'phrase': base, 'frequency': 0, 'next words': pd.Series(), 'is start': False})"""
-            # пробегаем все базовые фразы в предложении
-            for i in range(0, len(sentence) - self.n + 1):
-                base = self.__phrase(sentence, i)
-                if i == 0:
-                    self.start_base.append(base)
-                    # state this base as starting one
-                word = sentence[i + self.n - 1]
-                if base not in self.base_freq.keys():
-                    self.base_freq[base] = 0
-                self.base_freq[base] += 1
-                if base not in self.next_freq.keys():
-                    self.next_freq[base] = {}
-                if word not in self.next_freq[base].keys():
-                    self.next_freq[base][word] = 0
-                self.next_freq[base][word] += 1
-        print(self.next_freq)
-        # self.data.to_csv(self.root_path+self.name)
+        #TODO: реализуй общий случай
+        n_grams = gen_n_grams(dataset.get_units(), n=self.n)
+        self.is_normalized = False
 
-    # метод, отвечающий за генерацию предложений
-    def generate(self, num_sentences, min_words):
-        # генерируем нужное количество предложений
-        for s in range(num_sentences):
-            temp = ""
-            # случайно выбираем фразу, с которой начнется предложение
-            word = np.random.choice(self.start_base)
-            temp += (word + " ")
-            for w in range(min_words + np.random.randint(low=0, high=min_words)):
-                if word == "":
-                    word = np.random.choice(self.start_base)
-                try:
-                    # вероятностно выбираем следующее слово
-                    word = choice(self.next_freq[word], self.base_freq[word])
-                except KeyError:
-                    pass
-                temp += (word + " ")
+        for w0, w1, w2 in n_grams:
+            self.base_seq[w0, w1] += 1
+            self.n_seq[w0, w1, w2] += 1
 
-            temp = temp.strip()
-            print(temp + ".")
+    # сохранение модели в два файла (временно, хочу потом в один)
+        np.save(self.path+'/base.npy', dict(self.base_seq))
+        np.save(self.path+'/n_seq.npy', dict(self.n_seq))
 
-    # метод, переименовывающий модель
-    def rename(self, name):
-        os.rename(self.root_path + self.name, self.root_path + name)
-        self.name = name
+    # метод, генерирующий вероятности слов. Позволяет дообучать модель на другом датасете
+    def __set_probabilities(self):
+        self.model = {}
+        self.is_normalized = True
+        for (w0, w1, w2), freq in self.n_seq.items():
+            if (w0, w1) in self.model:
+                self.model[w0, w1].append((w2, freq / self.base_seq[w0, w1]))
+            else:
+                self.model[w0, w1] = [(w2, freq / self.base_seq[w0, w1])]
+
+    # метод, отвечающий за генерацию отдельных предложений
+    def generate(self):
+        # проверяем, посчитаны ли вероятности
+        if not self.is_normalized:
+            self.__set_probabilities()
+        phrase = ''
+        t0, t1 = 'blank', 'blank'
+        while 1:
+            #TODO: сделай нормальный выбор следующего
+            t0, t1 = t1, self.model[t0, t1][random.randint(0, len(self.model[t0, t1])-1)][0]
+            if t1 == 'blank':
+                break
+            if t1 in ".!?,;:" or t0 == 'blank':
+                phrase += t1
+            else:
+                phrase += ' ' + t1
+        return phrase.capitalize()

@@ -1,8 +1,14 @@
 from dataset import *
 from model import *
 
-d = Dataset("data/cringe.txt")
-print(d)
-m = Model()
+m = Model(path='models/test', n=4)
+d = Dataset("data/kafka.txt")
 m.train(d)
-m.generate(11, 5)
+"""d = Dataset("data/cringe.txt")
+m.train(d)
+d = Dataset("data/toshnota.txt")
+m.train(d)"""
+for i in range(20):
+    temp = m.generate()
+    if len(temp.split()) > 4:
+        print(temp)

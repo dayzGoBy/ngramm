@@ -1,33 +1,21 @@
 import re
-import pandas as pd
 
-# TODO: написать нормальную генерацию датасета и текста!!! и все
-def to_words(s):
-    res = ""
-    temp = ""
-    letters = "абвгдеёжзийклмнопрстуфхцчшщьыъэюя"
-    for i in s.lower():
-        if i in letters:
-            temp += i
-        else:
-            res += (temp+" ")
-            temp = ""
+# алфавит, используемый для генерации
+a = re.compile(u'[а-яА-Я-]+|[.,:;?!]+')
 
-    return res.lstrip(" ").split()
-
-
+# Класс датасета, является оберткой для массива текстовых единиц
 class Dataset:
-    sentences = []
+    units = []
 
     def __init__(self, path):
-        file = open(path, 'r')
-        # разбиваем текст на предложения
-        split_regex = re.compile(r'[.|!|?|…]')
-        self.sentences = [to_words(x) for x in filter(lambda t: t, [t.strip() for t in split_regex.split(file.read())])]
+        # разбиваем текст на текстовые единицы
+        for line in [line.lower() for line in open(path)]:
+            for unit in a.findall(line):
+                self.units.append(unit)
 
     def __str__(self):
-        return str(self.sentences[1:5:])
+        return str(self.units[1:11:])
 
-    def get(self, min_sentence_size=3):
-        return [x for x in self.sentences if len(x) >= min_sentence_size]
+    def get_units(self):
+        return self.units
 
