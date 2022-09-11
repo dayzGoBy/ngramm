@@ -10,7 +10,7 @@ args = parser.parse_args()
 
 model = Model(path=args.model)
 
-library = [f for f in os.listdir(args.inputdir) if os.path.isfile(os.path.join(args.model, f))]
+library = [f for f in os.listdir(args.inputdir)]
 
 for book in library:
     d = Dataset(args.inputdir + "/" + book)

@@ -33,21 +33,25 @@ def choice(ver):  # статический метод для вероятнос�
 class Model:  # класс, объектом которого является модель
     n = 3  # по умолчанию используем триграмную модель
     path = ""  # путь до папки, в которой лежит модель
-    n_seq = defaultdict()  # частоты n - грамм
-    base_seq = defaultdict()  # частоты n-1 - грамм
+    n_seq = defaultdict(int)  # частоты n - грамм
+    base_seq = defaultdict(int)  # частоты n-1 - грамм
     model = {}  # хэшмап, в которой каждой n-1 - грамме ставится в соответствие пара (слово, вероятность)
     is_normalized = False
 
     def __init__(self, path="models/test", mode="load"):
         self.path = path
+
         if not os.path.exists(path + "/base.pkl") or not os.path.exists(path + "/n_seq.pkl"):
             mode = 'create'
+        else:
+            mode = 'load'
+
         if mode == "create":  # создаем файлы в которых будет храниться модель
             open(path + "/base.pkl", "x")
             open(path + "/n_seq.pkl", "x")
         elif mode == "load":  # иначе загружаем данные из файлов
-            self.base_seq = pickle.load(open(path + '/base.pkl', 'rb'))
-            self.n_seq = pickle.load(open(path + '/n_seq.pkl', 'rb'))
+            self.base_seq = defaultdict(int, pickle.load(open(path + '/base.pkl', 'rb')))
+            self.n_seq = defaultdict(int, pickle.load(open(path + '/n_seq.pkl', 'rb')))
 
     def gen_n_grams(self, units):
         w0, w1 = 'blank', 'blank'  # в самом начале присвоим двум словам фиктивные значения
@@ -64,14 +68,16 @@ class Model:  # класс, объектом которого является �
 
     def train(self, dataset):  # метод, обучающий модель на датасете
         n_grams = self.gen_n_grams(dataset.get_units())  # генератор, возвращающий все n-граммы
+        self.is_normalized = False
         for w0, w1, w2 in n_grams:  # для каждой встреченной граммы увеличивается ее частота
             self.base_seq[w0, w1] += 1
             self.n_seq[w0, w1, w2] += 1
 
-        self.is_normalized = False
         # сохранение модели в два файла
         pickle.dump(dict(self.base_seq), open(self.path + '/base.pkl', 'wb'))
         pickle.dump(dict(self.n_seq), open(self.path + '/n_seq.pkl', 'wb'))
+
+        print("successfully trained")
 
     def __set_probabilities(self):  # метод, генерирующий вероятности слов
         # позволяет дообучать модель на другом датасете
@@ -87,22 +93,25 @@ class Model:  # класс, объектом которого является �
         if not self.is_normalized:  # проверяем, посчитаны ли вероятности
             self.__set_probabilities()
         phrase = ''
-        w0, w1, w2 = 'blank', 'blank', 'blank'
+        w0, w1 = 'blank', 'blank'
         while 1:
             if (w0, w1) == ('blank', 'blank'):
-                w0 = w1
+                words = []
+                for unit in a.findall(prefix.lower()):
+                    words.append(unit)
                 if prefix == "":
                     w1 = self.model[w0, w1][random.randint(0, len(self.model[w0, w1]) - 1)][0]
-                else:
-                    words = []
-                    for unit in a.findall(prefix):
-                        words.append(unit)
-
-                    for i in words[:len(words) - 2:]:
+                elif len(words) > 1:
+                    for i in words[:len(words) - 1:]:
                         phrase += (" " + i)
-
-                    w0, w1 = words[len(words) - 2], words[len(words) - 1]
-
+                    w0, w1 = words[- 2], words[- 1]
+                    try:
+                        self.model[w0, w1][0]
+                    except Exception:
+                        print("bad prefix")
+                        return
+                else:
+                    w1 = words[0]
             else:
                 w0, w1 = w1, choice(self.model[w0, w1])
 
@@ -111,8 +120,8 @@ class Model:  # класс, объектом которого является �
             if w1 in ".!?,;:" or w0 == 'blank':
                 phrase += w1
             else:
-                phrase += ' ' + w1
-        return phrase.capitalize()
+                phrase += (' ' + w1)
+        return phrase.lstrip().capitalize()
 
 
 class Dataset:  # Класс датасета, является оберткой для массива текстовых единиц

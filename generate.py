@@ -10,8 +10,13 @@ args = parser.parse_args()
 
 model = Model(path=args.model)
 
-for i in range(args.length):
-    print(model.generate(args.prefix))
+for i in range(max(int(args.length), 1)):
+    x = model.generate(args.prefix)
+    if x is None:
+        break
+    print("\n"+x)
+
+print("\n")
 
 
 
